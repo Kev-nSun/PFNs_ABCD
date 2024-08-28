@@ -1,0 +1,165 @@
+---
+title: "LME_pfac_PRS"
+author: "Kevin Sun"
+date: "3/14/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width=250)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(lsr)
+library(lme4)
+library(lmerTest)
+library(mediation)
+library(ggcorrplot)
+library(corrplot)
+library(RColorBrewer)
+library(glmnet)
+library(mgcv)
+library(gamm4)
+library(readr)
+
+library(devtools)
+#install_github("jfortin1/neuroCombatData")
+#install_github("jfortin1/neuroCombat_Rpackage")
+library(neuroCombat)
+
+library(R.matlab)
+library(mgcv)
+library(ggplot2)
+library(visreg)
+library(ggtext)
+library(sjPlot)
+library(Gmisc)
+
+library(lmtest)
+library(optimx)
+library(lmeresampler)
+```
+
+## Import the bifactor scores, covariates from DEAP
+```{r}
+newdata<-readRDS("DEAP-data-download_ABCD_psychopathology_bifactor_scores_BASELINE.rds")
+newdata.baseline<-newdata[newdata$event_name=="baseline_year_1_arm_1",]
+colnames(newdata.baseline)[1]<-"subjectkey"
+all.data <- newdata.baseline #11,876
+```
+
+
+# Add in Family, Age, and Site covariates
+```{r}
+family <-read.table("../acspsw03.txt",header=TRUE)
+family.baseline<-family[family$eventname=="baseline_year_1_arm_1",]
+abcd.data.almost <- merge(all.data,family.baseline[, c("subjectkey", setdiff(colnames(family.baseline),colnames(all.data)))],by="subjectkey")
+site_info <- readRDS("../DEAP-siteID.rds")
+site.baseline<-site_info[site_info$event_name=="baseline_year_1_arm_1",]
+colnames(site.baseline)[1]<-"subjectkey"
+abcd.data <- merge(abcd.data.almost,site.baseline[,c("subjectkey", setdiff(colnames(site.baseline),colnames(abcd.data.almost)))],by="subjectkey") #11,875
+```
+
+
+# Load discovery/replication matched samples -- Changed: matched_group 1 & 2 (>0) -> combined group
+```{r}
+traintest<-read_tsv("../participants.tsv")
+traintest.baseline<-traintest[traintest$session_id=="ses-baselineYear1Arm1",c("participant_id","matched_group")]
+colnames(traintest.baseline)[1]<-c("subjectkey")
+traintest.baseline$subjectkey <- gsub(pattern="sub-NDAR",replacement="NDAR_", traintest.baseline$subjectkey)
+traintest.baseline<-traintest.baseline %>% distinct()
+abcd.data.traintest <- merge(abcd.data,traintest.baseline,by="subjectkey")
+abcd.data.traintest<-abcd.data.traintest[!duplicated(abcd.data.traintest$subjectkey),] # remove duplicated subject
+abcd.data.combined <- abcd.data.traintest[abcd.data.traintest$matched_group>0,] #11,873
+```
+# Import PRS scores
+```{r}
+#for simplicity, rename PRS column titles
+PRS1 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_1_PRS.csv')
+PRS2 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_2_PRS.csv')
+
+colnames(PRS1)[2]<-c("subjectkey") #make subject col name consistent
+colnames(PRS2)[2]<-c("subjectkey")
+colnames(PRS1)<-gsub("Residual_PRS_1","PRS_1",colnames(PRS1)) #simplify PRS col names
+colnames(PRS2)<-gsub("Residual_PRS_2","PRS_2",colnames(PRS2))
+
+PRS1$subjectkey<-gsub('INV','NDAR_INV',PRS1$subjectkey) #match subject id format
+PRS2$subjectkey<-gsub('INV','NDAR_INV',PRS2$subjectkey)
+
+PRS1_alone <- PRS1[, c('subjectkey','PRS_1')] #subset dataframes with only subjectkey and PRS columns
+PRS2_alone <- PRS2[, c('subjectkey','PRS_2')]
+
+abcd.data.combined <- merge(abcd.data.combined,PRS1_alone,by="subjectkey")
+abcd.data.combined <- merge(abcd.data.combined,PRS2_alone,by="subjectkey")
+# 5815
+
+```
+
+# Apply ComBat harmonization across ABCD sites separately for combined set
+```{r}
+# prep to make sure there are no empty levels
+abcd.data.combined$abcd_site<-droplevels(abcd.data.combined$abcd_site)
+
+# harmonize combined set 
+batch <- abcd.data.combined$abcd_site
+abcd.data.combined.toharmonize <- abcd.data.combined[,c("General_p")]
+mod <- model.matrix(~abcd.data.combined$interview_age+abcd.data.combined$sex+abcd.data.combined$rel_family_id+abcd.data.combined$PRS_1+abcd.data.combined$PRS_2)
+dat <- t(abcd.data.combined.toharmonize)
+abcd.data.combat <- neuroCombat(dat=dat,mod=mod,batch=batch,eb=FALSE)
+dat.harmonized<-data.frame(t(abcd.data.combat$dat.combat))
+abcd.data.nopfac <- subset(abcd.data.combined,select=-c(General_p))
+abcd.data.combined.harmonized <- cbind(abcd.data.nopfac,dat.harmonized) # Add the harmonized data back into the main dataframe (BE AWARE THAT NOT ALL DATA IS HARMONIZED)
+colnames(abcd.data.combined.harmonized)[58]<-"General_p"
+
+```
+
+
+# fix age variable to be continuous
+```{r}
+abcd.data.combined.harmonized$interview_age <- as.numeric(abcd.data.combined.harmonized$interview_age)
+abcd.data.traintest$interview_age <- as.numeric(abcd.data.traintest$interview_age) #5815
+```
+
+
+# standardize age, meanFD, and PFN size
+```{r}
+abcd.data.combined.harmonized$interview_age<-(abcd.data.combined.harmonized$interview_age-mean(abcd.data.combined.harmonized$interview_age,na.rm=TRUE))/sd(abcd.data.combined.harmonized$interview_age,na.rm=TRUE)
+
+```
+
+
+# linear mixed effects models associating F1 with F2
+```{r}
+
+summary(lmer(PRS_2~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
+mod1<-lmer(PRS_2~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
+tab_model(mod1,pred.labels = c("Intercept","PRS_1","Age","Sex"),dv.labels=c("PRS_2"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F1_F2_outcome_NEW.doc", sep = ""))
+
+confint(mod1)
+
+```
+
+
+# linear mixed effects models associating psychopathology with F1 separately
+```{r}
+
+summary(lmer(General_p~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
+mod1<-lmer(General_p~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
+tab_model(mod1,pred.labels = c("Intercept","PRS_1","Age","Sex"),dv.labels=c("General_p"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F1_pfac_outcome_NEW.doc", sep = ""))
+
+confint(mod1)
+
+```
+
+
+# linear mixed effects models associating psychopathology with F2 separately including meanFD
+```{r}
+
+summary(lmer(General_p~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
+mod1<-lmer(General_p~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
+tab_model(mod1,pred.labels = c("Intercept","PRS_2","Age","Sex"),dv.labels=c("General_p"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F2_pfac_outcome_NEW.doc", sep = ""))
+
+confint(mod1)
+```
+
