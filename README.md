@@ -4,7 +4,7 @@ This contains scripts for a study in ABCD relating personalized funcitonal netwo
 
 ks_networks_7 contains scripts related primarily to p-factor ~ PFN relationships and p-factor + PFN heritability.
 
-Step_1. LME models of PFN size and p-factor
+  Step_1. LME models of PFN size and p-factor
   
   Step_2. Ridge regression of PFNs fit to p-factor
   
