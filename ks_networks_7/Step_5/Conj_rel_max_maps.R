@@ -198,3 +198,14 @@ catg<- 'F1_F2'
 sign<- "neg"
 outfile <- paste0(dir,'Conj_',catg,'_',sign,'_clust_10')
 #write_cifti(F1_F2_neg_map,outfile)
+
+pos_overlap_count <- c(Pfac_F1_pos_counter,Pfac_F2_pos_counter,F1_F2_pos_counter)
+neg_overlap_count <- c(Pfac_F1_neg_counter,Pfac_F2_neg_counter,F1_F2_neg_counter)
+overlap_count <- matrix(0,2,3)
+colnames(overlap_count) <- c("Pfac_F1","Pfac_F2","F1_F2")
+rownames(overlap_count) <- c("Pos_overlap","Neg_overlap")
+overlap_count[1,] <- pos_overlap_count
+overlap_count[2,] <- neg_overlap_count
+write.csv(overlap_count, file = "Conj_maps_overlap_count.csv")
+
+
