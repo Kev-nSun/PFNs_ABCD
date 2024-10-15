@@ -103,14 +103,14 @@ abcd.data.combined$abcd_site<-droplevels(abcd.data.combined$abcd_site)
 
 # harmonize combined set 
 batch <- abcd.data.combined$abcd_site
-abcd.data.combined.toharmonize <- abcd.data.combined[,c("General_p")]
+abcd.data.combined.toharmonize <- abcd.data.combined[,c("Factor5")]
 mod <- model.matrix(~abcd.data.combined$interview_age+abcd.data.combined$sex+abcd.data.combined$rel_family_id)
 dat <- t(abcd.data.combined.toharmonize)
 abcd.data.combat <- neuroCombat(dat=dat,mod=mod,batch=batch,eb=FALSE)
 dat.harmonized<-data.frame(t(abcd.data.combat$dat.combat))
-abcd.data.nopfac <- subset(abcd.data.combined,select=-c(General_p))
+abcd.data.nopfac <- subset(abcd.data.combined,select=-c(Factor5))
 abcd.data.combined.harmonized <- cbind(abcd.data.nopfac,dat.harmonized) # Add the harmonized data back into the main dataframe (BE AWARE THAT NOT ALL DATA IS HARMONIZED)
-colnames(abcd.data.combined.harmonized)[58]<-"General_p"
+colnames(abcd.data.combined.harmonized)[58]<-"Factor5"
 
 ```
 
@@ -129,36 +129,24 @@ abcd.data.combined.harmonized$interview_age<-(abcd.data.combined.harmonized$inte
 ```
 
 
-# linear mixed effects models associating F1 with F2
+# linear mixed effects models associating ADH sub-fac with F1 separately
 ```{r}
 
-summary(lmer(PRS_2~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
-mod1<-lmer(PRS_2~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
-tab_model(mod1,pred.labels = c("Intercept","PRS_1","Age","Sex"),dv.labels=c("PRS_2"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F1_F2_outcome_COMBAT.doc", sep = ""))
+summary(lmer(Factor5~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
+mod1<-lmer(Factor5~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
+tab_model(mod1,pred.labels = c("Intercept","PRS_1","Age","Sex"),dv.labels=c("ADH"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F1_ADH_COMBAT.doc", sep = ""))
 
 confint(mod1)
 
 ```
 
 
-# linear mixed effects models associating psychopathology with F1 separately
+# linear mixed effects models associating ADH sub-fac with F2 separately including meanFD
 ```{r}
 
-summary(lmer(General_p~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
-mod1<-lmer(General_p~PRS_1+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
-tab_model(mod1,pred.labels = c("Intercept","PRS_1","Age","Sex"),dv.labels=c("General_p"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F1_pfac_outcome_COMBAT.doc", sep = ""))
-
-confint(mod1)
-
-```
-
-
-# linear mixed effects models associating psychopathology with F2 separately including meanFD
-```{r}
-
-summary(lmer(General_p~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
-mod1<-lmer(General_p~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
-tab_model(mod1,pred.labels = c("Intercept","PRS_2","Age","Sex"),dv.labels=c("General_p"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F2_pfac_outcome_COMBAT.doc", sep = ""))
+summary(lmer(Factor5~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized))
+mod1<-lmer(Factor5~PRS_2+interview_age+sex+(1|rel_family_id),data=abcd.data.combined.harmonized)
+tab_model(mod1,pred.labels = c("Intercept","PRS_2","Age","Sex"),dv.labels=c("ADH"),digits=2,digits.p=2,show.se=TRUE,show.stat=TRUE,string.stat = "t",string.se = "Std. Error",show.intercept=TRUE,show.ci = FALSE, p.adjust="none",p.style="scientific", file = paste("Associations_F2_ADH_COMBAT.doc", sep = ""))
 
 confint(mod1)
 ```
