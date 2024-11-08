@@ -73,28 +73,6 @@ abcd.data.traintest <- merge(abcd.data,traintest.baseline,by="subjectkey")
 abcd.data.traintest<-abcd.data.traintest[!duplicated(abcd.data.traintest$subjectkey),] # remove duplicated subject
 abcd.data.combined <- abcd.data.traintest[abcd.data.traintest$matched_group>0,] #11,873
 ```
-# Import PRS scores
-```{r}
-#for simplicity, rename PRS column titles
-PRS1 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_1_PRS.csv')
-PRS2 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_2_PRS.csv')
-
-colnames(PRS1)[2]<-c("subjectkey") #make subject col name consistent
-colnames(PRS2)[2]<-c("subjectkey")
-colnames(PRS1)<-gsub("Residual_PRS_1","PRS_1",colnames(PRS1)) #simplify PRS col names
-colnames(PRS2)<-gsub("Residual_PRS_2","PRS_2",colnames(PRS2))
-
-PRS1$subjectkey<-gsub('INV','NDAR_INV',PRS1$subjectkey) #match subject id format
-PRS2$subjectkey<-gsub('INV','NDAR_INV',PRS2$subjectkey)
-
-PRS1_alone <- PRS1[, c('subjectkey','PRS_1')] #subset dataframes with only subjectkey and PRS columns
-PRS2_alone <- PRS2[, c('subjectkey','PRS_2')]
-
-abcd.data.combined <- merge(abcd.data.combined,PRS1_alone,by="subjectkey")
-abcd.data.combined <- merge(abcd.data.combined,PRS2_alone,by="subjectkey")
-# 5815
-
-```
 
 # Apply ComBat harmonization across ABCD sites separately for combined set
 ```{r}
@@ -128,7 +106,28 @@ abcd.data.combined.harmonized$interview_age<-(abcd.data.combined.harmonized$inte
 
 ```
 
+# Import PRS scores
+```{r}
+#for simplicity, rename PRS column titles
+PRS1 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_1_PRS.csv')
+PRS2 <- read.csv('../Residual_ABCD_EUR_Mallard_Factor_2_PRS.csv')
 
+colnames(PRS1)[2]<-c("subjectkey") #make subject col name consistent
+colnames(PRS2)[2]<-c("subjectkey")
+colnames(PRS1)<-gsub("Residual_PRS_1","PRS_1",colnames(PRS1)) #simplify PRS col names
+colnames(PRS2)<-gsub("Residual_PRS_2","PRS_2",colnames(PRS2))
+
+PRS1$subjectkey<-gsub('INV','NDAR_INV',PRS1$subjectkey) #match subject id format
+PRS2$subjectkey<-gsub('INV','NDAR_INV',PRS2$subjectkey)
+
+PRS1_alone <- PRS1[, c('subjectkey','PRS_1')] #subset dataframes with only subjectkey and PRS columns
+PRS2_alone <- PRS2[, c('subjectkey','PRS_2')]
+
+abcd.data.combined.harmonized <- merge(abcd.data.combined.harmonized,PRS1_alone,by="subjectkey")
+abcd.data.combined.harmonized <- merge(abcd.data.combined.harmonized,PRS2_alone,by="subjectkey")
+# 5815
+
+```
 
 # linear mixed effects models associating MAN sub-fac with F1 separately
 ```{r}
